@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* ============================================================
+   PriceScout 设计系统 —— 浅色 · 专业 · 数据感
+   ============================================================ */
+@theme {
+  /* 全局字体：Inter（中文回退到系统字体） */
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* 页面背景 #F8FAFC */
+  --color-page: #f8fafc;
+  /* 卡片背景 #FFFFFF */
+  --color-card: #ffffff;
+  /* 边框色 #E2E8F0 */
+  --color-line: #e2e8f0;
+
+  /* 主强调色：专业蓝 #2563EB */
+  --color-primary: #2563eb;
+  /* 次强调色：橙色，用于高亮数据 #F97316 */
+  --color-accent: #f97316;
+
+  /* 语义色 */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* 文字主色 #0F172A / 次要文字 #64748B */
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-page font-sans text-ink antialiased;
+    /* 全局等宽数字：所有数字按等宽渲染，表格/指标天然对齐；
+       需要时可单独使用 tabular-nums 工具类 */
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* 标准卡片：bg-white + border + rounded-xl + shadow-sm */
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  /* 可交互卡片：悬停时阴影加深、边框加重、轻微上移 */
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md;
+  }
+}
