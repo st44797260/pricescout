@@ -15,6 +15,7 @@ import {
   TrendingUp,
   User,
 } from 'lucide-react'
+import ScrapeStatusBar from '../components/ScrapeStatusBar.jsx'
 
 const NAV_ITEMS = [
   { to: '/', label: '数据看板', icon: LayoutDashboard, end: true },
@@ -73,6 +74,8 @@ export default function Layout() {
       (item.to !== '/' && location.pathname.startsWith(item.to)),
   )
   const currentLabel = current?.label ?? '数据看板'
+  // 详情页（如 /competitors/:id）在面包屑中追加一层
+  const isDetailPage = /^\/competitors\/[^/]+/.test(location.pathname)
 
   return (
     <div className="flex h-screen overflow-hidden bg-page">
@@ -111,14 +114,25 @@ export default function Layout() {
       </aside>
 
       {/* ============ 右侧主内容区 ============ */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {/* 数据采集状态提示条（悬浮于内容区顶部） */}
+        <ScrapeStatusBar />
+
         {/* 顶栏：面包屑 + 搜索框 + 用户头像 */}
         <header className="flex h-16 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-6">
           {/* 面包屑 */}
           <nav aria-label="面包屑" className="flex shrink-0 items-center gap-1.5 text-sm">
             <Home className="h-4 w-4 text-slate-400" />
             <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-            <span className="font-medium text-ink">{currentLabel}</span>
+            <span className={isDetailPage ? 'text-ink-muted' : 'font-medium text-ink'}>
+              {currentLabel}
+            </span>
+            {isDetailPage && (
+              <>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
+                <span className="font-medium text-ink">竞品详情</span>
+              </>
+            )}
           </nav>
 
           {/* 搜索框 */}

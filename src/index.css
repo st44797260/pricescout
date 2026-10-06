@@ -54,4 +54,34 @@
   .card-hover {
     @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md;
   }
+
+  /* 按钮 */
+  .btn {
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  /* 主按钮：蓝色渐变 */
+  .btn-primary {
+    @apply bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-sm hover:from-blue-700 hover:to-blue-500 hover:shadow-md active:from-blue-800 active:to-blue-600;
+  }
+
+  /* 次按钮：白底描边 */
+  .btn-outline {
+    @apply border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50;
+  }
+
+  /* 徽章 */
+  .badge {
+    @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset;
+  }
+
+  /* 表单输入 */
+  .input {
+    @apply h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-ink shadow-sm transition-colors placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100;
+  }
+
+  /* 表单标签 */
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
 }

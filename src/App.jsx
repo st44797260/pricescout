@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './layouts/Layout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Competitors from './pages/Competitors.jsx'
+import CompetitorDetail from './pages/CompetitorDetail.jsx'
 import Products from './pages/Products.jsx'
 import Pricing from './pages/Pricing.jsx'
 import Trends from './pages/Trends.jsx'
@@ -14,6 +15,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="competitors" element={<Competitors />} />
+          <Route path="competitors/:id" element={<CompetitorDetail />} />
           <Route path="products" element={<Products />} />
           <Route path="pricing" element={<Pricing />} />
           <Route path="trends" element={<Trends />} />
