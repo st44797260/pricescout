@@ -7,14 +7,17 @@ import {
   mockListAllProducts,
   mockListAnalyses,
   mockListCompetitors,
+  mockListPricing,
   mockListProducts,
   mockListShortlist,
   mockMarkScraping,
   mockRemoveShortlist,
   mockRunScrape,
   mockSaveAnalyses,
+  mockSavePricing,
 } from './mockBackend.js'
 import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
+import { heuristicPricing } from './pricing.js'
 import {
   SCRAPE_EVENTS,
   decActiveScrapes,
@@ -23,6 +26,7 @@ import {
 } from './scrapeEvents.js'
 
 export { SCRAPE_EVENTS, getActiveScrapeCount, onScrapeEvent } from './scrapeEvents.js'
+export { MARKETS } from './pricing.js'
 
 export const PLATFORM_OPTIONS = [
   { value: 'shopify', label: 'Shopify' },
@@ -275,4 +279,78 @@ export async function removeFromShortlist(productId) {
     .delete()
     .eq('product_id', productId)
   if (error) throw new Error(error.message)
+}
+
+// ---------------- 智能定价 ----------------
+
+/**
+ * 生成定价建议。
+ * 未配置 Supabase 时在前端执行启发式定价（与 Edge Function 兜底算法一致）。
+ */
+export async function suggestPricing(input) {
+  if (!isSupabaseConfigured) {
+    await delay(1200 + Math.random() * 800) // 模拟 AI 思考耗时
+    const products = await mockListAllProducts()
+    return heuristicPricing(input, products)
+  }
+  const { data, error } = await supabase.functions.invoke('suggest-pricing', {
+    body: input,
+  })
+  if (error) throw new Error(error.message)
+  if (data?.success === false) throw new Error(data.error ?? '定价分析失败')
+  return data.suggestion
+}
+
+/** 保存定价方案到 pricing_suggestions 表 */
+export async function savePricingSuggestion(suggestion, input) {
+  const row = {
+    product_name: input.product_name,
+    cost: input.cost,
+    target_margin: input.target_margin,
+    shipping_cost: input.shipping_cost,
+    platform_fee: input.platform_fee,
+    suggested_price_low: suggestion.price_low,
+    suggested_price_recommended: suggestion.price_recommended,
+    suggested_price_high: suggestion.price_high,
+    strategy_text: suggestion.strategy_text,
+    competitor_distribution: {
+      ...suggestion.distribution,
+      percentile: suggestion.percentile,
+      risks: suggestion.risks,
+      market: input.market,
+    },
+  }
+  if (!isSupabaseConfigured) return mockSavePricing(row)
+  const { data, error } = await supabase
+    .from('pricing_suggestions')
+    .insert(row)
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/** 定价历史行归一化：competitor_distribution 中的扩展字段拍平到顶层 */
+function normalizePricingRow(row) {
+  return {
+    ...row,
+    market: row.competitor_distribution?.market ?? 'global',
+    percentile: row.competitor_distribution?.percentile ?? null,
+    risks: row.competitor_distribution?.risks ?? [],
+    distribution: row.competitor_distribution ?? {},
+  }
+}
+
+/** 定价历史 */
+export async function listPricingSuggestions() {
+  if (!isSupabaseConfigured) {
+    const rows = await mockListPricing()
+    return rows.map(normalizePricingRow)
+  }
+  const { data, error } = await supabase
+    .from('pricing_suggestions')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(normalizePricingRow)
 }

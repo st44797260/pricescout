@@ -1,5 +1,6 @@
 import { generateMockProducts } from './mockData.js'
 import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
+import { heuristicPricing } from './pricing.js'
 
 /**
  * 本地模拟后端（localStorage 持久化）。
@@ -29,6 +30,7 @@ function emptyStore() {
     snapshots: {},
     analyses: {},
     shortlist: {},
+    pricing: [],
   }
 }
 
@@ -43,6 +45,7 @@ function loadStore() {
       snapshots: store.snapshots ?? {},
       analyses: store.analyses ?? {},
       shortlist: store.shortlist ?? {},
+      pricing: store.pricing ?? [],
     }
   } catch {
     return seedStore()
@@ -163,6 +166,54 @@ function seedStore() {
       created_at: hoursAgo(1),
     }
     picked += 1
+  }
+
+  // 预置两条定价方案（用启发式算法对示例输入计算），供定价历史页演示
+  const pricingDemos = [
+    {
+      demo: {
+        product_name: 'Insulated Water Bottle',
+        cost: 6.5,
+        target_margin: 35,
+        shipping_cost: 3.2,
+        platform_fee: 15,
+        market: 'us',
+      },
+      hours: 22,
+    },
+    {
+      demo: {
+        product_name: 'LED Strip Lights',
+        cost: 4.2,
+        target_margin: 40,
+        shipping_cost: 2.8,
+        platform_fee: 15,
+        market: 'sea',
+      },
+      hours: 70,
+    },
+  ]
+  for (const { demo, hours } of pricingDemos) {
+    const suggestion = heuristicPricing(demo, allProducts)
+    store.pricing.push({
+      id: uuid(),
+      product_name: demo.product_name,
+      cost: demo.cost,
+      target_margin: demo.target_margin,
+      shipping_cost: demo.shipping_cost,
+      platform_fee: demo.platform_fee,
+      suggested_price_low: suggestion.price_low,
+      suggested_price_recommended: suggestion.price_recommended,
+      suggested_price_high: suggestion.price_high,
+      strategy_text: suggestion.strategy_text,
+      competitor_distribution: {
+        ...suggestion.distribution,
+        percentile: suggestion.percentile,
+        risks: suggestion.risks,
+        market: demo.market,
+      },
+      created_at: hoursAgo(hours),
+    })
   }
 
   saveStore(store)
@@ -366,6 +417,24 @@ export async function mockListShortlist() {
     rows.push({ ...item, product })
   }
   return rows.sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? ''),
+  )
+}
+
+// ---------------- 定价方案 ----------------
+
+export async function mockSavePricing(row) {
+  await delay(300)
+  const store = loadStore()
+  const saved = { ...row, id: uuid(), created_at: new Date().toISOString() }
+  store.pricing.push(saved)
+  saveStore(store)
+  return saved
+}
+
+export async function mockListPricing() {
+  await delay(150)
+  return [...loadStore().pricing].sort((a, b) =>
     (b.created_at ?? '').localeCompare(a.created_at ?? ''),
   )
 }

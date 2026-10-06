@@ -74,12 +74,14 @@ export default function Layout() {
       (item.to !== '/' && location.pathname.startsWith(item.to)),
   )
   const currentLabel = current?.label ?? '数据看板'
-  // 子页面（竞品详情 / 选品清单）在面包屑中追加一层
+  // 子页面（竞品详情 / 选品清单 / 定价历史）在面包屑中追加一层
   const extraCrumb = /^\/competitors\/[^/]+/.test(location.pathname)
     ? '竞品详情'
     : location.pathname === '/products/shortlist'
       ? '选品清单'
-      : null
+      : location.pathname === '/pricing/history'
+        ? '定价历史'
+        : null
 
   return (
     <div className="flex h-screen overflow-hidden bg-page">

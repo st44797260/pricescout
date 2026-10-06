@@ -44,8 +44,16 @@ export default function RangeSlider({ min, max, step = 1, value, onChange }) {
   )
 }
 
-/** 单滑块（最低评分），带渐变填充轨道 */
-export function SingleSlider({ min, max, step = 1, value, onChange, formatValue }) {
+/** 单滑块（最低评分 / 定价参数），带渐变填充轨道 */
+export function SingleSlider({
+  min,
+  max,
+  step = 1,
+  value,
+  onChange,
+  formatValue,
+  hideMax = false,
+}) {
   const pct = ((value - min) / Math.max(max - min, 1)) * 100
   return (
     <div>
@@ -60,11 +68,11 @@ export function SingleSlider({ min, max, step = 1, value, onChange, formatValue 
         style={{
           background: `linear-gradient(to right, #2563EB ${pct}%, #E2E8F0 ${pct}%)`,
         }}
-        aria-label="最低评分"
+        aria-label="滑块"
       />
       <div className="mt-1 flex justify-between text-xs tabular-nums text-ink-muted">
-        <span>{formatValue ? formatValue(value) : value}</span>
-        <span>{formatValue ? formatValue(max) : max}</span>
+        <span className="font-medium text-ink">{formatValue ? formatValue(value) : value}</span>
+        {!hideMax && <span>{formatValue ? formatValue(max) : max}</span>}
       </div>
     </div>
   )

@@ -66,6 +66,10 @@ supabase secrets set AI_MODEL=gpt-4o-mini                     # 可选
 
 综合推荐指数 = 加权平均；每批 8 个产品分片调用，前端实时显示进度。配置 `AI_API_KEY` 后走大模型（OpenAI 兼容接口），未配置时使用与前端一致的启发式算法；结果写入 `analyses` 表（同产品仅保留最新）。
 
+### 智能定价流程
+
+`suggest-pricing` Edge Function：从 `products` 表按标题相似度筛选同类产品的价格分布（不足 3 个时回退全量竞品），结合成本结构（产品成本 / 物流 / 佣金比例）与目标市场调用 AI，返回三档建议价、策略说明、竞品定位百分位与风险提示。保本价 = (成本+物流)/(1-佣金)，达成目标利润率售价 = (成本+物流)/(1-佣金-利润率)。函数只计算不落库，用户点击「保存定价方案」时写入 `pricing_suggestions` 表（扩展数据存于 `competitor_distribution` jsonb），历史页支持勾选 2-3 个方案横向对比。
+
 ## 目录结构
 
 ```
@@ -88,7 +92,7 @@ supabase/
 - [x] 设计系统与全局布局
 - [x] 竞品管理 + 数据采集（Supabase + Edge Function）
 - [x] AI 选品评分（/products + 选品清单 /products/shortlist + analyze-products）
+- [x] 智能定价（/pricing + 定价历史 /pricing/history + suggest-pricing）
 - [ ] 数据看板（经营指标图表）
-- [ ] 定价助手（定价模型与利润测算）
 - [ ] 趋势监控（基于 snapshots 的价格/评分趋势）
 - [ ] 报告中心

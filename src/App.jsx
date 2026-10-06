@@ -6,6 +6,7 @@ import CompetitorDetail from './pages/CompetitorDetail.jsx'
 import Products from './pages/Products.jsx'
 import Shortlist from './pages/Shortlist.jsx'
 import Pricing from './pages/Pricing.jsx'
+import PricingHistory from './pages/PricingHistory.jsx'
 import Trends from './pages/Trends.jsx'
 import Reports from './pages/Reports.jsx'
 
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="products" element={<Products />} />
           <Route path="products/shortlist" element={<Shortlist />} />
           <Route path="pricing" element={<Pricing />} />
+          <Route path="pricing/history" element={<PricingHistory />} />
           <Route path="trends" element={<Trends />} />
           <Route path="reports" element={<Reports />} />
           {/* 未匹配路由一律回到数据看板 */}
