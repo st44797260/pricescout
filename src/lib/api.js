@@ -3,18 +3,23 @@ import {
   mockAddCompetitor,
   mockAddShortlist,
   mockDeleteCompetitor,
+  mockDetectAnomalies,
   mockGetCompetitor,
+  mockIgnoreAnomaly,
   mockListAllProducts,
   mockListAnalyses,
+  mockListAnomalies,
   mockListCompetitors,
   mockListPricing,
   mockListProducts,
   mockListShortlist,
+  mockMarkAnomalyRead,
   mockMarkScraping,
   mockRemoveShortlist,
   mockRunScrape,
   mockSaveAnalyses,
   mockSavePricing,
+  mockSnapshotSeries,
 } from './mockBackend.js'
 import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
 import { heuristicPricing } from './pricing.js'
@@ -353,4 +358,78 @@ export async function listPricingSuggestions() {
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data ?? []).map(normalizePricingRow)
+}
+
+// ---------------- 趋势监控与异常检测 ----------------
+
+/**
+ * 快照时间序列（近 days 天），统一行结构：
+ * { date, price, rating, review_count, competitor_id, competitor_name, product_id, product_title }
+ */
+export async function getSnapshotSeries(days) {
+  if (!isSupabaseConfigured) return mockSnapshotSeries(days)
+  const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
+  const { data, error } = await supabase
+    .from('snapshots')
+    .select(
+      'snapshot_date, price, rating, review_count, product:products(id, title, competitor_id, competitor:competitors(id, name))',
+    )
+    .gte('snapshot_date', since)
+  if (error) throw new Error(error.message)
+  return (data ?? [])
+    .filter((r) => r.product && r.product.competitor)
+    .map((r) => ({
+      date: r.snapshot_date,
+      price: r.price,
+      rating: r.rating,
+      review_count: r.review_count,
+      competitor_id: r.product.competitor_id,
+      competitor_name: r.product.competitor.name,
+      product_id: r.product.id,
+      product_title: r.product.title,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function normalizeAnomaly(row) {
+  return {
+    ...row,
+    product_title: row.product?.title ?? row.product_title ?? '已下架产品',
+    competitor_name: row.competitor?.name ?? row.competitor_name ?? '未知竞品',
+  }
+}
+
+export async function listAnomalies() {
+  if (!isSupabaseConfigured) return mockListAnomalies()
+  const { data, error } = await supabase
+    .from('anomalies')
+    .select('*, product:products(title), competitor:competitors(name)')
+    .order('detected_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(normalizeAnomaly)
+}
+
+/** 运行异常检测（Edge Function detect-anomalies），返回新发现条数 */
+export async function detectAnomalies(competitorId = null) {
+  if (!isSupabaseConfigured) {
+    return { detected: await mockDetectAnomalies(competitorId) }
+  }
+  const { data, error } = await supabase.functions.invoke('detect-anomalies', {
+    body: { competitor_id: competitorId },
+  })
+  if (error) throw new Error(error.message)
+  if (data?.success === false) throw new Error(data.error ?? '异常检测失败')
+  return { detected: data?.detected ?? 0 }
+}
+
+export async function markAnomalyRead(id) {
+  if (!isSupabaseConfigured) return mockMarkAnomalyRead(id)
+  const { error } = await supabase.from('anomalies').update({ is_read: true }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function ignoreAnomaly(id) {
+  if (!isSupabaseConfigured) return mockIgnoreAnomaly(id)
+  const { error } = await supabase.from('anomalies').delete().eq('id', id)
+  if (error) throw new Error(error.message)
 }

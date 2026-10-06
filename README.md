@@ -68,7 +68,20 @@ supabase secrets set AI_MODEL=gpt-4o-mini                     # 可选
 
 ### 智能定价流程
 
-`suggest-pricing` Edge Function：从 `products` 表按标题相似度筛选同类产品的价格分布（不足 3 个时回退全量竞品），结合成本结构（产品成本 / 物流 / 佣金比例）与目标市场调用 AI，返回三档建议价、策略说明、竞品定位百分位与风险提示。保本价 = (成本+物流)/(1-佣金)，达成目标利润率售价 = (成本+物流)/(1-佣金-利润率)。函数只计算不落库，用户点击「保存定价方案」时写入 `pricing_suggestions` 表（扩展数据存于 `competitor_distribution` jsonb），历史页支持勾选 2-3 个方案横向对比。
+`suggest-pricing` Edge Function：从 `products` 表按标题相似度筛选同类产品的价格分布（不足 2 个时回退全量竞品），结合成本结构（产品成本 / 物流 / 佣金比例）与目标市场调用 AI，返回三档建议价、策略说明、竞品定位百分位与风险提示。保本价 = (成本+物流)/(1-佣金)，达成目标利润率售价 = (成本+物流)/(1-佣金-利润率)。函数只计算不落库，用户点击「保存定价方案」时写入 `pricing_suggestions` 表（扩展数据存于 `competitor_distribution` jsonb），历史页支持勾选 2-3 个方案横向对比。
+
+### 异常检测流程
+
+`detect-anomalies` Edge Function：对比每个产品最近两次不同日期的快照（近 60 天窗口），按规则生成异常事件并写入 `anomalies` 表（同产品同类型同日幂等去重）：
+
+| 规则 | 类型 |
+| --- | --- |
+| 价格下降 > 10% | 降价促销 price_drop |
+| 价格上升 > 10% | 涨价 price_rise |
+| 评分下降 ≥ 0.5 | 口碑下滑 rating_drop |
+| 本次采集出现、上次不存在的产品 | 新品上架 new_product |
+
+可在趋势监控页手动触发「运行异常检测」。趋势页主图支持竞品多选、7/30/90 天范围、价格/评分/评价数/新品数量四个维度、时间轴刷选缩放，降价异常以红色圆点标注在主图上；看板含 KPI 滚动数字、平均价格面积图、异常类型饼图与最近 5 条异常。
 
 ## 目录结构
 
@@ -93,6 +106,5 @@ supabase/
 - [x] 竞品管理 + 数据采集（Supabase + Edge Function）
 - [x] AI 选品评分（/products + 选品清单 /products/shortlist + analyze-products）
 - [x] 智能定价（/pricing + 定价历史 /pricing/history + suggest-pricing）
-- [ ] 数据看板（经营指标图表）
-- [ ] 趋势监控（基于 snapshots 的价格/评分趋势）
+- [x] 趋势监控 + 异常检测（/trends + 数据看板 + detect-anomalies）
 - [ ] 报告中心
