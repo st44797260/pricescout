@@ -74,8 +74,12 @@ export default function Layout() {
       (item.to !== '/' && location.pathname.startsWith(item.to)),
   )
   const currentLabel = current?.label ?? '数据看板'
-  // 详情页（如 /competitors/:id）在面包屑中追加一层
-  const isDetailPage = /^\/competitors\/[^/]+/.test(location.pathname)
+  // 子页面（竞品详情 / 选品清单）在面包屑中追加一层
+  const extraCrumb = /^\/competitors\/[^/]+/.test(location.pathname)
+    ? '竞品详情'
+    : location.pathname === '/products/shortlist'
+      ? '选品清单'
+      : null
 
   return (
     <div className="flex h-screen overflow-hidden bg-page">
@@ -124,13 +128,13 @@ export default function Layout() {
           <nav aria-label="面包屑" className="flex shrink-0 items-center gap-1.5 text-sm">
             <Home className="h-4 w-4 text-slate-400" />
             <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-            <span className={isDetailPage ? 'text-ink-muted' : 'font-medium text-ink'}>
+            <span className={extraCrumb ? 'text-ink-muted' : 'font-medium text-ink'}>
               {currentLabel}
             </span>
-            {isDetailPage && (
+            {extraCrumb && (
               <>
                 <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-                <span className="font-medium text-ink">竞品详情</span>
+                <span className="font-medium text-ink">{extraCrumb}</span>
               </>
             )}
           </nav>

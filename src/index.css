@@ -65,6 +65,11 @@
     @apply bg-gradient-to-r from-blue-600 to-blue-400 text-white shadow-sm hover:from-blue-700 hover:to-blue-500 hover:shadow-md active:from-blue-800 active:to-blue-600;
   }
 
+  /* AI 按钮：紫色渐变（选品分析专用） */
+  .btn-ai {
+    @apply bg-gradient-to-r from-violet-600 to-purple-500 text-white shadow-sm hover:from-violet-700 hover:to-purple-600 hover:shadow-md active:from-violet-800 active:to-purple-700;
+  }
+
   /* 次按钮：白底描边 */
   .btn-outline {
     @apply border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50;
@@ -83,5 +88,70 @@
   /* 表单标签 */
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+
+  /* 单滑块（最低评分） */
+  .range {
+    appearance: none;
+    height: 6px;
+    width: 100%;
+    border-radius: 9999px;
+    outline: none;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+    cursor: pointer;
+  }
+  .range::-moz-range-thumb {
+    height: 12px;
+    width: 12px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+    cursor: pointer;
+  }
+
+  /* 双滑块（价格区间）：两层原生 range 叠加，轨道由色条渲染 */
+  .dual-range {
+    position: relative;
+    height: 20px;
+  }
+  .dual-range input[type='range'] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    appearance: none;
+    background: none;
+    pointer-events: none;
+    outline: none;
+  }
+  .dual-range input[type='range']::-webkit-slider-thumb {
+    appearance: none;
+    pointer-events: auto;
+    height: 16px;
+    width: 16px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+    cursor: pointer;
+  }
+  .dual-range input[type='range']::-moz-range-thumb {
+    pointer-events: auto;
+    height: 12px;
+    width: 12px;
+    border-radius: 9999px;
+    background: #ffffff;
+    border: 2px solid #2563eb;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+    cursor: pointer;
   }
 }

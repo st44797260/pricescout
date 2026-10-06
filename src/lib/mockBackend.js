@@ -1,10 +1,13 @@
 import { generateMockProducts } from './mockData.js'
+import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
 
 /**
  * 本地模拟后端（localStorage 持久化）。
  * 未配置 VITE_SUPABASE_* 环境变量时，api.js 会把所有调用路由到这里，
  * 模拟与 Supabase + Edge Function 相同的数据流：
- * 新建竞品（采集中）→ 延迟后写入 20 条产品 + 快照 → 已完成。
+ * - 竞品采集：新建竞品（采集中）→ 延迟后写入 20 条产品 + 快照 → 已完成
+ * - AI 分析：直接在前端执行启发式评分（与 analyze-products 兜底算法一致）
+ * - 选品清单：localStorage 存储，支持加入/移出/导出
  */
 
 const STORAGE_KEY = 'pricescout.mockdb.v1'
@@ -20,7 +23,13 @@ function originOf(url) {
 }
 
 function emptyStore() {
-  return { competitors: [], products: {}, snapshots: {} }
+  return {
+    competitors: [],
+    products: {},
+    snapshots: {},
+    analyses: {},
+    shortlist: {},
+  }
 }
 
 function loadStore() {
@@ -32,6 +41,8 @@ function loadStore() {
       competitors: store.competitors ?? [],
       products: store.products ?? {},
       snapshots: store.snapshots ?? {},
+      analyses: store.analyses ?? {},
+      shortlist: store.shortlist ?? {},
     }
   } catch {
     return seedStore()
@@ -52,7 +63,12 @@ function hoursAgo(h) {
   return new Date(Date.now() - h * 3600 * 1000).toISOString()
 }
 
-/** 首次访问时写入三条示例竞品，覆盖 已完成 / 失败 两种状态 */
+/**
+ * 首次访问时写入示例数据：
+ * - 三条竞品，覆盖 已完成 / 失败 两种状态
+ * - 已完成竞品的产品预跑一遍启发式 AI 评分
+ * - 选品清单预置两个高分会选产品
+ */
 function seedStore() {
   const store = emptyStore()
   const demos = [
@@ -82,10 +98,11 @@ function seedStore() {
     },
   ]
 
+  const allProducts = []
   for (const demo of demos) {
     const id = uuid()
     const scrapedAt = hoursAgo(demo.scrapedHoursAgo)
-    const competitor = {
+    store.competitors.push({
       id,
       name: demo.name,
       url: demo.url,
@@ -94,38 +111,67 @@ function seedStore() {
       last_scraped_at: demo.status === 'completed' ? scrapedAt : null,
       status: demo.status,
       created_at: hoursAgo(demo.scrapedHoursAgo + 2),
-    }
-    store.competitors.push(competitor)
+    })
 
-    if (demo.status === 'completed') {
-      const origin = originOf(demo.url)
-      const products = generateMockProducts(demo.productCount, origin).map(
-        (p) => ({
-          id: uuid(),
-          competitor_id: id,
-          scraped_at: scrapedAt,
-          ...p,
-        }),
-      )
-      store.products[id] = products
-      const today = new Date().toISOString().slice(0, 10)
-      store.snapshots[id] = products.map((p) => ({
-        id: uuid(),
-        product_id: p.id,
-        price: p.price,
-        rating: p.rating,
-        review_count: p.review_count,
-        snapshot_date: today,
-      }))
+    if (demo.status !== 'completed') continue
+    const origin = originOf(demo.url)
+    const products = generateMockProducts(demo.productCount, origin).map((p) => ({
+      id: uuid(),
+      competitor_id: id,
+      scraped_at: scrapedAt,
+      ...p,
+    }))
+    store.products[id] = products
+    const today = new Date().toISOString().slice(0, 10)
+    store.snapshots[id] = products.map((p) => ({
+      id: uuid(),
+      product_id: p.id,
+      price: p.price,
+      rating: p.rating,
+      review_count: p.review_count,
+      snapshot_date: today,
+    }))
+    allProducts.push(...products)
+  }
+
+  // 预填充 AI 分析结果（全批次上下文下的启发式评分）
+  const enriched = enrichSimilarCounts(allProducts)
+  for (const p of enriched) {
+    const result = heuristicScore(p, enriched)
+    store.analyses[p.id] = {
+      product_id: p.id,
+      scores: result.scores,
+      total_score: result.total_score,
+      reason: result.reason,
+      created_at: p.scraped_at,
     }
   }
+
+  // 预置两个不同竞品的高分产品到选品清单
+  const ranked = [...enriched]
+    .sort((a, b) => store.analyses[b.id].total_score - store.analyses[a.id].total_score)
+  const pickedCompetitors = new Set()
+  let picked = 0
+  for (const p of ranked) {
+    if (picked >= 2) break
+    if (pickedCompetitors.has(p.competitor_id)) continue
+    pickedCompetitors.add(p.competitor_id)
+    store.shortlist[p.id] = {
+      id: uuid(),
+      product_id: p.id,
+      note: picked === 0 ? '高分优先验证款' : '利润款候选',
+      created_at: hoursAgo(1),
+    }
+    picked += 1
+  }
+
   saveStore(store)
   return store
 }
 
 function replaceProducts(store, competitorId, products, scrapedAt) {
   const old = store.products[competitorId] ?? []
-  for (const p of old) delete store.snapshots[p.id]
+  delete store.snapshots[competitorId]
   store.products[competitorId] = products.map((p) => ({
     id: uuid(),
     competitor_id: competitorId,
@@ -141,9 +187,14 @@ function replaceProducts(store, competitorId, products, scrapedAt) {
     review_count: p.review_count,
     snapshot_date: today,
   }))
+  // 旧产品被替换，其历史分析结果与清单项一并失效
+  for (const p of old) {
+    delete store.analyses[p.id]
+    delete store.shortlist[p.id]
+  }
 }
 
-// ---------------- 对外 API（与真实后端同构，均为 async） ----------------
+// ---------------- 竞品与产品 ----------------
 
 export async function mockListCompetitors() {
   await delay(150)
@@ -178,9 +229,7 @@ export async function mockAddCompetitor({ name, url, platform }) {
 
 /** 模拟一次采集：延迟后全量替换 20 条产品并写入快照，返回产品数量 */
 export async function mockRunScrape(competitorId) {
-  await delay(
-    MOCK_SCRAPE_MIN_MS + Math.random() * MOCK_SCRAPE_EXTRA_MS,
-  )
+  await delay(MOCK_SCRAPE_MIN_MS + Math.random() * MOCK_SCRAPE_EXTRA_MS)
   const store = loadStore()
   const competitor = store.competitors.find((c) => c.id === competitorId)
   if (!competitor) return 0 // 采集期间被删除，静默取消
@@ -208,7 +257,13 @@ export async function mockMarkScraping(competitorId) {
 export async function mockDeleteCompetitor(id) {
   await delay(200)
   const store = loadStore()
-  for (const p of store.products[id] ?? []) delete store.snapshots[p.id]
+  for (const p of store.products[id] ?? []) {
+    delete store.analyses[p.id]
+    const sl = Object.entries(store.shortlist).find(
+      ([, item]) => item.product_id === p.id,
+    )
+    if (sl) delete store.shortlist[sl[0]]
+  }
   delete store.products[id]
   delete store.snapshots[id]
   store.competitors = store.competitors.filter((c) => c.id !== id)
@@ -220,5 +275,97 @@ export async function mockListProducts(competitorId) {
   const store = loadStore()
   return [...(store.products[competitorId] ?? [])].sort((a, b) =>
     (b.scraped_at ?? '').localeCompare(a.scraped_at ?? ''),
+  )
+}
+
+/** 全部产品（附带竞品信息），供选品分析页使用 */
+export async function mockListAllProducts() {
+  await delay(200)
+  const store = loadStore()
+  const byId = new Map(store.competitors.map((c) => [c.id, c]))
+  const rows = []
+  for (const [competitorId, list] of Object.entries(store.products)) {
+    const competitor = byId.get(competitorId)
+    for (const p of list) {
+      rows.push({
+        ...p,
+        competitor_name: competitor?.name ?? null,
+        competitor_platform: competitor?.platform ?? null,
+        competitor_url: competitor?.url ?? null,
+      })
+    }
+  }
+  return rows.sort((a, b) => (b.scraped_at ?? '').localeCompare(a.scraped_at ?? ''))
+}
+
+// ---------------- AI 分析结果 ----------------
+
+export async function mockSaveAnalyses(results) {
+  const store = loadStore()
+  for (const r of results) {
+    store.analyses[r.product_id] = {
+      product_id: r.product_id,
+      scores: r.scores,
+      total_score: r.total_score,
+      reason: r.reason,
+      created_at: new Date().toISOString(),
+    }
+  }
+  saveStore(store)
+}
+
+export async function mockListAnalyses() {
+  await delay(100)
+  return Object.values(loadStore().analyses).sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? ''),
+  )
+}
+
+// ---------------- 选品清单 ----------------
+
+export async function mockAddShortlist(productId, note = null) {
+  const store = loadStore()
+  if (!store.shortlist[productId]) {
+    store.shortlist[productId] = {
+      id: uuid(),
+      product_id: productId,
+      note,
+      created_at: new Date().toISOString(),
+    }
+    saveStore(store)
+  }
+  return store.shortlist[productId]
+}
+
+export async function mockRemoveShortlist(productId) {
+  const store = loadStore()
+  delete store.shortlist[productId]
+  saveStore(store)
+}
+
+/** 清单行（附带产品与竞品信息） */
+export async function mockListShortlist() {
+  await delay(150)
+  const store = loadStore()
+  const rows = []
+  for (const item of Object.values(store.shortlist)) {
+    let product = null
+    for (const [competitorId, list] of Object.entries(store.products)) {
+      const found = list.find((p) => p.id === item.product_id)
+      if (found) {
+        const competitor = store.competitors.find((c) => c.id === competitorId)
+        product = {
+          ...found,
+          competitor_name: competitor?.name ?? null,
+          competitor_platform: competitor?.platform ?? null,
+        }
+        break
+      }
+    }
+    if (!product) continue // 产品已被重新采集替换，清单项失效
+    rows.push({ ...item, product })
+  }
+  return rows.sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? ''),
   )
 }

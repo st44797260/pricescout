@@ -1,13 +1,20 @@
 import { supabase, isSupabaseConfigured } from './supabase.js'
 import {
   mockAddCompetitor,
+  mockAddShortlist,
   mockDeleteCompetitor,
   mockGetCompetitor,
+  mockListAllProducts,
+  mockListAnalyses,
   mockListCompetitors,
   mockListProducts,
+  mockListShortlist,
   mockMarkScraping,
+  mockRemoveShortlist,
   mockRunScrape,
+  mockSaveAnalyses,
 } from './mockBackend.js'
+import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
 import {
   SCRAPE_EVENTS,
   decActiveScrapes,
@@ -22,6 +29,33 @@ export const PLATFORM_OPTIONS = [
   { value: 'woocommerce', label: 'WooCommerce' },
   { value: 'custom', label: '自定义' },
 ]
+
+export const SORT_OPTIONS = [
+  { value: 'ai', label: 'AI推荐指数' },
+  { value: 'price', label: '价格' },
+  { value: 'rating', label: '评分' },
+  { value: 'review_count', label: '评价数' },
+]
+
+const ANALYZE_CHUNK_SIZE = 8
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export function chunkArray(arr, size) {
+  const chunks = []
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size))
+  return chunks
+}
+
+/** 统一产品行结构：竞品信息拍平到顶层 */
+function normalizeProductRow(row) {
+  return {
+    ...row,
+    competitor_name: row.competitor?.name ?? null,
+    competitor_platform: row.competitor?.platform ?? null,
+    competitor_url: row.competitor?.url ?? null,
+  }
+}
 
 /**
  * 触发一次采集（新竞品或重新采集）。
@@ -136,4 +170,109 @@ export async function listProducts(competitorId) {
     .order('scraped_at', { ascending: false })
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+/** 全部竞品的产品（选品分析页数据源），附带竞品名称/平台 */
+export async function listAllProducts() {
+  if (!isSupabaseConfigured) return mockListAllProducts()
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, competitor:competitors(name, url, platform)')
+    .order('scraped_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(normalizeProductRow)
+}
+
+// ---------------- AI 选品评分 ----------------
+
+export async function listAnalyses() {
+  if (!isSupabaseConfigured) return mockListAnalyses()
+  const { data, error } = await supabase
+    .from('analyses')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+/** 把分析结果列表转成 productId → analysis 的映射（同产品取最新一条） */
+export function analysesToMap(rows) {
+  const map = {}
+  for (const row of rows) {
+    if (!map[row.product_id]) map[row.product_id] = row
+  }
+  return map
+}
+
+/**
+ * 分批对产品执行 AI 评分（每批 8 个），onProgress 上报进度。
+ * 未配置 Supabase 时在前端直接执行启发式评分（与 Edge Function 兜底一致）。
+ * 返回全部分析结果数组。
+ */
+export async function analyzeProductsBatch(products, onProgress) {
+  if (products.length === 0) return []
+  const enriched = enrichSimilarCounts(products)
+  const chunks = chunkArray(enriched, ANALYZE_CHUNK_SIZE)
+  const results = []
+  const total = enriched.length
+
+  for (const chunk of chunks) {
+    onProgress?.({ done: results.length, total })
+    if (!isSupabaseConfigured) {
+      await delay(450 + Math.random() * 450)
+      const scored = chunk.map((p) => heuristicScore(p, enriched))
+      await mockSaveAnalyses(scored)
+      results.push(...scored)
+    } else {
+      const { data, error } = await supabase.functions.invoke('analyze-products', {
+        body: {
+          products: chunk.map((p) => ({
+            id: p.id,
+            title: p.title,
+            price: p.price,
+            rating: p.rating,
+            review_count: p.review_count,
+            competitor_name: p.competitor_name,
+            similar_count: p.similar_count,
+          })),
+        },
+      })
+      if (error) throw new Error(error.message)
+      if (data?.success === false) throw new Error(data.error ?? 'AI 分析失败')
+      results.push(...(data?.results ?? []))
+    }
+    onProgress?.({ done: results.length, total })
+  }
+  return results
+}
+
+// ---------------- 选品清单 ----------------
+
+export async function listShortlist() {
+  if (!isSupabaseConfigured) return mockListShortlist()
+  const { data, error } = await supabase
+    .from('shortlist')
+    .select('id, product_id, note, created_at, product:products(*, competitor:competitors(name, url, platform))')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? [])
+    .filter((row) => row.product)
+    .map((row) => ({ ...row, product: normalizeProductRow(row.product) }))
+}
+
+export async function addToShortlist(productId, note = null) {
+  if (!isSupabaseConfigured) return mockAddShortlist(productId, note)
+  const { error } = await supabase
+    .from('shortlist')
+    .upsert({ product_id: productId, note }, { onConflict: 'product_id', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
+}
+
+export async function removeFromShortlist(productId) {
+  if (!isSupabaseConfigured) return mockRemoveShortlist(productId)
+  const { error } = await supabase
+    .from('shortlist')
+    .delete()
+    .eq('product_id', productId)
+  if (error) throw new Error(error.message)
 }

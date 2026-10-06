@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Competitors from './pages/Competitors.jsx'
 import CompetitorDetail from './pages/CompetitorDetail.jsx'
 import Products from './pages/Products.jsx'
+import Shortlist from './pages/Shortlist.jsx'
 import Pricing from './pages/Pricing.jsx'
 import Trends from './pages/Trends.jsx'
 import Reports from './pages/Reports.jsx'
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="competitors" element={<Competitors />} />
           <Route path="competitors/:id" element={<CompetitorDetail />} />
           <Route path="products" element={<Products />} />
+          <Route path="products/shortlist" element={<Shortlist />} />
           <Route path="pricing" element={<Pricing />} />
           <Route path="trends" element={<Trends />} />
           <Route path="reports" element={<Reports />} />
