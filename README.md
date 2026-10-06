@@ -83,6 +83,11 @@ supabase secrets set AI_MODEL=gpt-4o-mini                     # 可选
 
 可在趋势监控页手动触发「运行异常检测」。趋势页主图支持竞品多选、7/30/90 天范围、价格/评分/评价数/新品数量四个维度、时间轴刷选缩放，降价异常以红色圆点标注在主图上；看板含 KPI 滚动数字、平均价格面积图、异常类型饼图与最近 5 条异常。
 
+### 报告中心与 AI 助手
+
+- `generate-report` Edge Function：按配置（竞品范围 / TOP N / 是否含定价与趋势）汇总选品评分、定价方案与 30 天趋势，调用 AI 生成执行摘要（无 Key 时模板摘要），结构化写入 `reports` 表。报告详情页为商业报告排版，`window.print()` 导出 PDF（打印样式已去除导航与按钮）。
+- `chat` Edge Function：AI 助手对话接口，读取会话历史（最近 12 条）调用大模型并以流式（SSE → 纯文本块）返回，用户与助手消息均写入 `chat_logs`；未配置 Key 时使用本地规则回复逐字输出。前端悬浮球（脉冲光晕）+ 400×600 对话窗口，会话 ID 存于浏览器。
+
 ## 目录结构
 
 ```
@@ -107,4 +112,4 @@ supabase/
 - [x] AI 选品评分（/products + 选品清单 /products/shortlist + analyze-products）
 - [x] 智能定价（/pricing + 定价历史 /pricing/history + suggest-pricing）
 - [x] 趋势监控 + 异常检测（/trends + 数据看板 + detect-anomalies）
-- [ ] 报告中心
+- [x] 报告中心 + AI 助手（/reports + /reports/:id + generate-report + chat）

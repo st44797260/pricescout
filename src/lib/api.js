@@ -4,7 +4,10 @@ import {
   mockAddShortlist,
   mockDeleteCompetitor,
   mockDetectAnomalies,
+  mockGenerateReport,
+  mockGetChatLogs,
   mockGetCompetitor,
+  mockGetReport,
   mockIgnoreAnomaly,
   mockListAllProducts,
   mockListAnalyses,
@@ -12,17 +15,20 @@ import {
   mockListCompetitors,
   mockListPricing,
   mockListProducts,
+  mockListReports,
   mockListShortlist,
   mockMarkAnomalyRead,
   mockMarkScraping,
   mockRemoveShortlist,
   mockRunScrape,
   mockSaveAnalyses,
+  mockSaveChatLog,
   mockSavePricing,
   mockSnapshotSeries,
 } from './mockBackend.js'
 import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
 import { heuristicPricing } from './pricing.js'
+import { getChatSessionId, localAssistantReply } from './chat.js'
 import {
   SCRAPE_EVENTS,
   decActiveScrapes,
@@ -432,4 +438,100 @@ export async function ignoreAnomaly(id) {
   if (!isSupabaseConfigured) return mockIgnoreAnomaly(id)
   const { error } = await supabase.from('anomalies').delete().eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+// ---------------- 报告中心 ----------------
+
+export async function listReports() {
+  if (!isSupabaseConfigured) return mockListReports()
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function getReport(id) {
+  if (!isSupabaseConfigured) return mockGetReport(id)
+  const { data, error } = await supabase.from('reports').select('*').eq('id', id).single()
+  if (error) return null
+  return data
+}
+
+/** 生成报告：汇总选品/定价/趋势 + AI 执行摘要，写入 reports 表 */
+export async function generateReport(config) {
+  if (!isSupabaseConfigured) return mockGenerateReport(config)
+  const { data, error } = await supabase.functions.invoke('generate-report', {
+    body: config,
+  })
+  if (error) throw new Error(error.message)
+  if (data?.success === false) throw new Error(data.error ?? '报告生成失败')
+  return data.report
+}
+
+// ---------------- AI 助手 ----------------
+
+export { getChatSessionId } from './chat.js'
+
+export async function listChatLogs() {
+  const sessionId = getChatSessionId()
+  if (!isSupabaseConfigured) return mockGetChatLogs(sessionId)
+  const { data, error } = await supabase
+    .from('chat_logs')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+/**
+ * 发送消息并流式接收回复。
+ * 未配置 Supabase → 本地规则回复逐字输出；已配置 → 读取 Edge Function 的流式响应。
+ * 两种模式的用户/助手消息都会写入 chat_logs。
+ */
+export async function sendChatMessage({ message, onChunk }) {
+  const sessionId = getChatSessionId()
+
+  if (!isSupabaseConfigured) {
+    await mockSaveChatLog({ session_id: sessionId, role: 'user', content: message })
+    const reply = localAssistantReply(message)
+    let acc = ''
+    for (const ch of reply) {
+      acc += ch
+      onChunk?.(ch)
+      await delay(12 + Math.random() * 26)
+    }
+    await mockSaveChatLog({ session_id: sessionId, role: 'assistant', content: acc })
+    return acc
+  }
+
+  const res = await fetch(`${supabase.supabaseUrl}/functions/v1/chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: supabase.supabaseKey,
+      Authorization: `Bearer ${supabase.supabaseKey}`,
+    },
+    body: JSON.stringify({ session_id: sessionId, message }),
+  })
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(detail || `助手服务请求失败 (${res.status})`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let acc = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    const chunk = decoder.decode(value, { stream: true })
+    if (chunk) {
+      acc += chunk
+      onChunk?.(chunk)
+    }
+  }
+  return acc
 }

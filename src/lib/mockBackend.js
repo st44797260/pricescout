@@ -1,6 +1,7 @@
 import { generateMockProducts } from './mockData.js'
 import { enrichSimilarCounts, heuristicScore } from './aiScoring.js'
 import { heuristicPricing } from './pricing.js'
+import { ANOMALY_TYPES } from './trends.js'
 
 /**
  * 本地模拟后端（localStorage 持久化）。
@@ -38,6 +39,8 @@ function emptyStore() {
     shortlist: {},
     pricing: [],
     anomalies: [],
+    reports: [],
+    chat_logs: [],
   }
 }
 
@@ -54,6 +57,8 @@ function loadStore() {
       shortlist: store.shortlist ?? {},
       pricing: store.pricing ?? [],
       anomalies: store.anomalies ?? [],
+      reports: store.reports ?? [],
+      chat_logs: store.chat_logs ?? [],
     }
   } catch {
     return seedStore()
@@ -360,6 +365,18 @@ function seedStore() {
     store.snapshots[competitor.id] = rows
     store.anomalies.push(...anomalies)
   }
+
+  // 预置一份选品报告
+  store.reports.push({
+    ...buildReport(store, {
+      title: '选品分析报告 · 周度',
+      competitor_ids: [],
+      top_n: 10,
+      include_pricing: true,
+      include_trends: true,
+    }),
+    created_at: hoursAgo(6),
+  })
 
   saveStore(store)
   return store
@@ -763,4 +780,173 @@ export async function mockIgnoreAnomaly(id) {
   const store = loadStore()
   store.anomalies = store.anomalies.filter((a) => a.id !== id)
   saveStore(store)
+}
+
+// ---------------- 报告中心 ----------------
+
+const fmtReport = (v) => (v == null ? '—' : `$${Number(v).toFixed(2)}`)
+
+/** 模板化执行摘要（与 generate-report Edge Function 的兜底逻辑一致） */
+function buildSummaryText({ competitors, ranked, avgScore, changePct, anomalyCounts, pricing, topN }) {
+  const best = ranked[0]
+  const anomalyTotal = Object.values(anomalyCounts).reduce((s, n) => s + n, 0)
+  const anomalyText = Object.entries(anomalyCounts)
+    .map(([t, n]) => `${ANOMALY_TYPES[t]?.label ?? t} ${n} 条`)
+    .join('、')
+  const trendText =
+    changePct == null
+      ? '价格趋势数据不足'
+      : `近 30 天竞品平均售价${changePct > 0 ? '上行' : changePct < 0 ? '下行' : '持平'}约 ${Math.abs(changePct).toFixed(1)}%`
+  const pricingText = pricing.length
+    ? `已有 ${pricing.length} 条定价方案，推荐价区间 ${fmtReport(pricing[pricing.length - 1]?.suggested_price_low)}–${fmtReport(pricing[0]?.suggested_price_high)}`
+    : '暂无保存的定价方案，建议为候选产品补做利润测算'
+
+  return (
+    `本报告基于 ${competitors.length} 个竞品的监控数据，按 AI 综合推荐指数（市场需求 30%、竞争程度 25%、利润空间 25%、物流友好度 20% 加权）` +
+    `筛选出 TOP ${topN} 推荐产品，平均指数 ${avgScore ?? '—'} 分${best ? `，其中「${best.title}」以 ${best.total_score} 分居首` : ''}。` +
+    `趋势方面，${trendText}；近 30 天共检测到异常事件 ${anomalyTotal} 条${anomalyText ? `（${anomalyText}）` : ''}。` +
+    `定价方面，${pricingText}。综合来看，建议优先跟进高分产品并核实其实际利润空间，对降价频繁的品类保持观望。`
+  )
+}
+
+/** 汇总选品评分 / 定价建议 / 趋势数据，组装结构化报告（同步） */
+function buildReport(store, config) {
+  const compIds =
+    config.competitor_ids?.length > 0
+      ? config.competitor_ids
+      : store.competitors.map((c) => c.id)
+  const competitors = store.competitors.filter((c) => compIds.includes(c.id))
+
+  const pool = []
+  for (const [cid, list] of Object.entries(store.products)) {
+    if (!compIds.includes(cid)) continue
+    const cname = competitors.find((c) => c.id === cid)?.name ?? '未知竞品'
+    for (const p of list) {
+      const analysis = store.analyses[p.id]
+      pool.push({
+        id: p.id,
+        title: p.title,
+        competitor_name: cname,
+        price: p.price,
+        rating: p.rating,
+        review_count: p.review_count,
+        total_score: analysis ? analysis.total_score : null,
+        reason: analysis?.reason ?? null,
+      })
+    }
+  }
+  pool.sort((a, b) => (b.total_score ?? -1) - (a.total_score ?? -1))
+  const ranked = pool.slice(0, config.top_n ?? 10)
+  const scored = ranked.filter((p) => p.total_score != null)
+  const avgScore = scored.length
+    ? round2(scored.reduce((s, p) => s + p.total_score, 0) / scored.length)
+    : null
+
+  const pricing = config.include_pricing
+    ? [...store.pricing].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, 3)
+    : []
+
+  let series = []
+  let changePct = null
+  const anomalyCounts = {}
+  if (config.include_trends) {
+    const since = dateDaysAgo(30)
+    const byDate = new Map()
+    for (const [cid, snaps] of Object.entries(store.snapshots)) {
+      if (!compIds.includes(cid)) continue
+      for (const s of snaps) {
+        if (s.snapshot_date < since || !s.price) continue
+        if (!byDate.has(s.snapshot_date)) byDate.set(s.snapshot_date, { sum: 0, n: 0 })
+        const d = byDate.get(s.snapshot_date)
+        d.sum += s.price
+        d.n += 1
+      }
+    }
+    series = [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, d]) => ({ date, value: round2(d.sum / d.n) }))
+    if (series.length >= 2) {
+      const start = series[0].value
+      const end = series[series.length - 1].value
+      changePct = start > 0 ? round2(((end - start) / start) * 100) : null
+    }
+    for (const a of store.anomalies) {
+      if (!compIds.includes(a.competitor_id)) continue
+      if (String(a.detected_at).slice(0, 10) < since) continue
+      anomalyCounts[a.type] = (anomalyCounts[a.type] ?? 0) + 1
+    }
+  }
+
+  const summary = buildSummaryText({
+    competitors,
+    ranked,
+    avgScore,
+    changePct,
+    anomalyCounts,
+    pricing,
+    topN: config.top_n ?? 10,
+  })
+
+  return {
+    id: uuid(),
+    title: config.title,
+    summary,
+    content: {
+      config,
+      competitors: competitors.map((c) => ({
+        id: c.id,
+        name: c.name,
+        platform: c.platform,
+        product_count: c.product_count,
+      })),
+      top_products: ranked,
+      pricing,
+      trends: {
+        window_days: 30,
+        series,
+        change_pct: changePct,
+        anomaly_counts: anomalyCounts,
+      },
+      model: 'heuristic',
+    },
+    created_at: new Date().toISOString(),
+  }
+}
+
+export async function mockGenerateReport(config) {
+  await delay(2200 + Math.random() * 1200)
+  const store = loadStore()
+  const report = buildReport(store, config)
+  store.reports.push(report)
+  saveStore(store)
+  return report
+}
+
+export async function mockListReports() {
+  await delay(150)
+  return [...loadStore().reports].sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? ''),
+  )
+}
+
+export async function mockGetReport(id) {
+  await delay(100)
+  return loadStore().reports.find((r) => r.id === id) ?? null
+}
+
+// ---------------- AI 助手对话记录 ----------------
+
+export async function mockGetChatLogs(sessionId) {
+  await delay(120)
+  return loadStore()
+    .chat_logs.filter((l) => l.session_id === sessionId)
+    .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''))
+}
+
+export async function mockSaveChatLog(entry) {
+  const store = loadStore()
+  const row = { id: uuid(), created_at: new Date().toISOString(), ...entry }
+  store.chat_logs.push(row)
+  saveStore(store)
+  return row
 }

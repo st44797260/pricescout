@@ -9,6 +9,7 @@ import Pricing from './pages/Pricing.jsx'
 import PricingHistory from './pages/PricingHistory.jsx'
 import Trends from './pages/Trends.jsx'
 import Reports from './pages/Reports.jsx'
+import ReportDetail from './pages/ReportDetail.jsx'
 
 export default function App() {
   return (
@@ -20,6 +21,8 @@ export default function App() {
           <Route path="competitors/:id" element={<CompetitorDetail />} />
           <Route path="products" element={<Products />} />
           <Route path="products/shortlist" element={<Shortlist />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="reports/:id" element={<ReportDetail />} />
           <Route path="pricing" element={<Pricing />} />
           <Route path="pricing/history" element={<PricingHistory />} />
           <Route path="trends" element={<Trends />} />

@@ -155,3 +155,23 @@
     cursor: pointer;
   }
 }
+
+/* ============================================================
+   打印样式（报告导出 PDF：去壳、全宽、保留图表颜色）
+   ============================================================ */
+@media print {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
