@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, FileBarChart, Loader2, Plus } from 'lucide-react'
+import { ArrowRight, FileBarChart, Plus } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import GenerateReportModal from '../components/GenerateReportModal.jsx'
+import { SkeletonBlock } from '../components/Skeleton.jsx'
 import { listCompetitors, listReports } from '../lib/api.js'
 import { formatDateTime } from '../lib/format.js'
 
@@ -57,12 +58,19 @@ export default function Reports() {
       )}
 
       {reports === null ? (
-        <div className="flex justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="card space-y-3 p-5">
+              <SkeletonBlock className="h-5 w-1/3" />
+              <SkeletonBlock className="h-3 w-full" />
+              <SkeletonBlock className="h-3 w-2/3" />
+            </div>
+          ))}
         </div>
       ) : reports.length === 0 ? (
         <div className="card">
           <EmptyState
+            illustration="report"
             icon={FileBarChart}
             title="还没有报告"
             description="配置竞品范围与产品数量，生成一份包含 AI 执行摘要的选品分析报告。"

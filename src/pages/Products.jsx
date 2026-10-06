@@ -7,6 +7,8 @@ import MultiSelect from '../components/MultiSelect.jsx'
 import RangeSlider, { SingleSlider } from '../components/RangeSlider.jsx'
 import ProductCard from '../components/ProductCard.jsx'
 import ProductDrawer from '../components/ProductDrawer.jsx'
+import PulseNodes from '../components/PulseNodes.jsx'
+import { SkeletonCards } from '../components/Skeleton.jsx'
 import {
   addToShortlist,
   analyzeProductsBatch,
@@ -235,6 +237,7 @@ export default function Products() {
       {/* AI 分析进度条 */}
       {progress && (
         <div className="card mt-4 p-4">
+          <PulseNodes className="mb-3" />
           <div className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2 font-medium text-ink">
               {analyzing && <Loader2 className="h-4 w-4 animate-spin text-violet-600" />}
@@ -261,12 +264,11 @@ export default function Products() {
 
       {/* 列表 */}
       {products === null ? (
-        <div className="flex justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-        </div>
+        <SkeletonCards count={4} className="mt-4" />
       ) : products.length === 0 ? (
         <div className="card mt-4">
           <EmptyState
+            illustration="search"
             icon={PackageSearch}
             title="暂无产品数据"
             description="先到竞品管理添加竞品并完成采集，这里就会有可分析的产品。"
@@ -303,6 +305,7 @@ export default function Products() {
           {sorted.length === 0 ? (
             <div className="card mt-3">
               <EmptyState
+                illustration="search"
                 icon={PackageSearch}
                 title="没有符合筛选条件的产品"
                 description="放宽价格区间、评分或竞品范围试试。"

@@ -13,10 +13,12 @@ import {
   YAxis,
 } from 'recharts'
 import { format } from 'date-fns'
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import MultiSelect from '../components/MultiSelect.jsx'
 import AnomalyList from '../components/AnomalyList.jsx'
+import EmptyState from '../components/EmptyState.jsx'
+import { SkeletonBlock } from '../components/Skeleton.jsx'
 import {
   detectAnomalies,
   getSnapshotSeries,
@@ -251,13 +253,13 @@ export default function Trends() {
           <span className="text-xs text-ink-muted">拖动下方滑块可缩放时间轴</span>
         </div>
         {rows === null ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-          </div>
+          <SkeletonBlock className="h-[380px]" />
         ) : merged.length === 0 ? (
-          <p className="py-16 text-center text-sm text-ink-muted">
-            暂无快照数据，先到竞品管理完成一次采集。
-          </p>
+          <EmptyState
+            illustration="radar"
+            title="暂无快照数据"
+            description="先到竞品管理完成一次采集，趋势曲线就会出现在这里。"
+          />
         ) : dimension === 'new_products' ? (
           <ResponsiveContainer width="100%" height={340}>
             <BarChart data={merged} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>

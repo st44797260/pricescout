@@ -11,6 +11,8 @@ import {
 import PageHeader from '../components/PageHeader.jsx'
 import PriceDistributionChart from '../components/PriceDistributionChart.jsx'
 import { SingleSlider } from '../components/RangeSlider.jsx'
+import PulseNodes from '../components/PulseNodes.jsx'
+import AnimatedNumber from '../components/AnimatedNumber.jsx'
 import {
   savePricingSuggestion,
   suggestPricing,
@@ -241,8 +243,8 @@ export default function Pricing() {
           {!suggestion && !generating && !error && <EmptyResult />}
 
           {generating && (
-            <div className="card flex min-h-[420px] flex-col items-center justify-center gap-3 p-8">
-              <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+            <div className="card flex min-h-[420px] flex-col items-center justify-center gap-5 p-8">
+              <PulseNodes className="w-full" />
               <p className="text-sm text-ink-muted">
                 AI 正在分析成本结构与竞品价格分布…
               </p>
@@ -260,7 +262,7 @@ export default function Pricing() {
 
           {suggestion && (
             <div className="space-y-4">
-              {/* 三档建议价 */}
+              {/* 三档建议价（数字滚动动画） */}
               <div className="grid grid-cols-3 gap-3">
                 <PriceCard label="最低建议价" value={suggestion.price_low} />
                 <div className="card relative border-blue-300 bg-blue-50/70 p-4 text-center shadow-md">
@@ -270,7 +272,11 @@ export default function Pricing() {
                   </span>
                   <p className="text-xs text-blue-700">推荐价</p>
                   <p className="mt-1 text-2xl font-bold tabular-nums text-blue-700">
-                    {formatPrice(suggestion.price_recommended)}
+                    <AnimatedNumber
+                      value={Number(suggestion.price_recommended)}
+                      decimals={2}
+                      format={formatPrice}
+                    />
                   </p>
                 </div>
                 <PriceCard label="最高建议价" value={suggestion.price_high} />
@@ -437,7 +443,11 @@ function PriceCard({ label, value }) {
     <div className="card p-4 text-center">
       <p className="text-xs text-ink-muted">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums text-ink">
-        {formatPrice(value)}
+        {value == null ? (
+          '—'
+        ) : (
+          <AnimatedNumber value={Number(value)} decimals={2} format={formatPrice} />
+        )}
       </p>
     </div>
   )

@@ -4,12 +4,12 @@ import {
   ArrowLeftRight,
   Check,
   History,
-  Loader2,
   Star,
   Tag,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import { SkeletonRows } from '../components/Skeleton.jsx'
 import { listPricingSuggestions, MARKETS } from '../lib/api.js'
 import { marginPct, netProfit } from '../lib/pricing.js'
 import { cn, formatDateTime, formatPrice } from '../lib/format.js'
@@ -49,11 +49,7 @@ export default function PricingHistory() {
   )
 
   if (rows === null) {
-    return (
-      <div className="flex justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-      </div>
-    )
+    return <SkeletonRows rows={4} cols={3} className="card" />
   }
 
   return (
@@ -76,6 +72,7 @@ export default function PricingHistory() {
       {rows.length === 0 ? (
         <div className="card">
           <EmptyState
+            illustration="tag"
             icon={History}
             title="还没有保存过定价方案"
             description="在定价助手生成建议后点击「保存定价方案」，即可在这里回顾与对比。"

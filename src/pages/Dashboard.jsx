@@ -17,6 +17,7 @@ import { AlertTriangle, ArrowRight, Package, Sparkles, Store } from 'lucide-reac
 import PageHeader from '../components/PageHeader.jsx'
 import AnimatedNumber from '../components/AnimatedNumber.jsx'
 import AnomalyList from '../components/AnomalyList.jsx'
+import { SkeletonBlock } from '../components/Skeleton.jsx'
 import {
   getSnapshotSeries,
   ignoreAnomaly,
@@ -117,6 +118,8 @@ export default function Dashboard() {
     { label: 'AI 分析次数', value: analysesCount, icon: Sparkles, tone: 'violet' },
   ]
 
+  const loading = competitors === null
+
   return (
     <div>
       <PageHeader
@@ -131,28 +134,42 @@ export default function Dashboard() {
       )}
 
       {/* KPI 卡片 */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi, i) => (
-          <div key={kpi.label} className="card card-hover flex items-center gap-4 p-5">
-            <div
-              className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg',
-                KPI_TONES[kpi.tone],
-              )}
-            >
-              <kpi.icon className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-2xl font-semibold tracking-tight text-ink">
-                <AnimatedNumber value={kpi.value} duration={0.9 + i * 0.12} />
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonBlock key={i} className="h-[76px]" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {kpis.map((kpi, i) => (
+            <div key={kpi.label} className="card card-hover group flex items-center gap-4 p-5">
+              <div
+                className={cn(
+                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110',
+                  KPI_TONES[kpi.tone],
+                )}
+              >
+                <kpi.icon className="h-5 w-5" />
               </div>
-              <div className="mt-0.5 text-sm text-ink-muted">{kpi.label}</div>
+              <div className="min-w-0">
+                <div className="truncate text-2xl font-semibold tracking-tight text-ink">
+                  <AnimatedNumber value={kpi.value} duration={0.9 + i * 0.12} />
+                </div>
+                <div className="mt-0.5 text-sm text-ink-muted">{kpi.label}</div>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* 两个图表 */}
+      {loading ? (
+        <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <SkeletonBlock className="h-[330px]" />
+          <SkeletonBlock className="h-[330px]" />
+        </div>
+      ) : (
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <div className="card p-5">
           <div className="flex items-center justify-between">
@@ -226,6 +243,7 @@ export default function Dashboard() {
                     outerRadius="85%"
                     paddingAngle={2}
                     strokeWidth={2}
+                    animationDuration={900}
                   >
                     {anomalyTypeData.map((d) => (
                       <Cell key={d.type} fill={PIE_COLORS[d.type]} />
@@ -249,6 +267,7 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      )}
 
       {/* 最近异常事件 */}
       <div className="card mt-4 overflow-hidden">

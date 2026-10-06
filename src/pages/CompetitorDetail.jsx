@@ -16,6 +16,7 @@ import ProductImage from '../components/ProductImage.jsx'
 import StatCard from '../components/StatCard.jsx'
 import { PlatformBadge, StatusBadge } from '../components/Badges.jsx'
 import { SortHeader } from '../components/SortHeader.jsx'
+import { SkeletonRows } from '../components/Skeleton.jsx'
 import {
   getCompetitor,
   listProducts,
@@ -91,8 +92,14 @@ export default function CompetitorDetail() {
 
   if (competitor === null) {
     return (
-      <div className="flex justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      <div className="space-y-4">
+        <SkeletonRows rows={2} cols={3} className="card p-5" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <SkeletonRows key={i} rows={1} cols={1} className="card p-5" />
+          ))}
+        </div>
+        <SkeletonRows rows={6} cols={6} className="card" />
       </div>
     )
   }
@@ -101,6 +108,7 @@ export default function CompetitorDetail() {
     return (
       <div className="card mt-6">
         <EmptyState
+          illustration="search"
           icon={AlertTriangle}
           title="竞品不存在"
           description="它可能已被删除，或链接有误。"
@@ -174,24 +182,36 @@ export default function CompetitorDetail() {
         </p>
       )}
 
-      {/* 数据概览 */}
+      {/* 数据概览（数值变化时滚动 + 闪烁） */}
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard index={0} label="产品总数" value={formatNumber(stats.total)} icon={Package} tone="primary" />
-        <StatCard index={1} label="平均价格" value={formatPrice(stats.avgPrice)} icon={DollarSign} tone="accent" />
+        <StatCard index={0} label="产品总数" value={stats.total} icon={Package} tone="primary" flash />
+        <StatCard
+          index={1}
+          label="平均价格"
+          value={stats.avgPrice}
+          format={formatPrice}
+          icon={DollarSign}
+          tone="accent"
+          flash
+        />
         <StatCard
           index={2}
           label="平均评分"
-          value={stats.avgRating == null ? '—' : stats.avgRating.toFixed(1)}
+          value={stats.avgRating}
+          format={(v) => v.toFixed(1)}
           sub="/ 5.0"
           icon={Star}
           tone="warning"
+          flash
         />
         <StatCard
           index={3}
           label="平均评价数"
-          value={stats.avgReviews == null ? '—' : formatNumber(Math.round(stats.avgReviews))}
+          value={stats.avgReviews}
+          format={(v) => formatNumber(Math.round(v))}
           icon={MessageSquare}
           tone="success"
+          flash
         />
       </div>
 
@@ -204,96 +224,122 @@ export default function CompetitorDetail() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
-                {COLUMNS.map((col) => (
-                  <th key={col.key} className="px-4 py-3">
-                    {col.sortable ? (
-                      <SortHeader label={col.label} column={col.key} sort={sort} onToggle={toggleSort} />
-                    ) : (
-                      col.label
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {products === null && (
-                <tr>
-                  <td colSpan={COLUMNS.length} className="px-4 py-16 text-center">
-                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
-                  </td>
-                </tr>
-              )}
+        {products === null ? (
+          <SkeletonRows rows={6} cols={6} />
+        ) : visibleProducts.length === 0 ? (
+          scraping ? (
+            <EmptyState
+              icon={Loader2}
+              title="数据采集中"
+              description="采集完成后，产品列表会自动出现在这里。"
+            />
+          ) : (
+            <EmptyState
+              illustration="box"
+              icon={Package}
+              title="暂无产品数据"
+              description="该竞品还没有采集到产品，点击右上角「重新采集」试试。"
+            />
+          )
+        ) : (
+          <>
+            {/* 桌面表格 */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
+                    {COLUMNS.map((col) => (
+                      <th key={col.key} className="px-4 py-3">
+                        {col.sortable ? (
+                          <SortHeader label={col.label} column={col.key} sort={sort} onToggle={toggleSort} />
+                        ) : (
+                          col.label
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleProducts.map((p) => (
+                    <tr
+                      key={p.id}
+                      className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50"
+                    >
+                      <td className="px-4 py-3">
+                        <ProductImage src={p.image_url} alt={p.title} className="h-10 w-10" />
+                      </td>
+                      <td className="max-w-[320px] px-4 py-3">
+                        {p.product_url ? (
+                          <a
+                            href={p.product_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block truncate font-medium text-ink hover:text-blue-600"
+                            title={p.title}
+                          >
+                            {p.title}
+                          </a>
+                        ) : (
+                          <span className="block truncate font-medium text-ink" title={p.title}>
+                            {p.title}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-medium tabular-nums text-ink">
+                        {formatPrice(p.price)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.rating == null ? (
+                          <span className="text-slate-300">—</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 tabular-nums text-ink">
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                            {Number(p.rating).toFixed(1)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-ink-muted">
+                        {formatNumber(p.review_count)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 tabular-nums text-ink-muted">
+                        {formatDateTime(p.scraped_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-              {products !== null && visibleProducts.length === 0 && (
-                <tr>
-                  <td colSpan={COLUMNS.length}>
-                    {scraping ? (
-                      <EmptyState
-                        icon={Loader2}
-                        title="数据采集中"
-                        description="采集完成后，产品列表会自动出现在这里。"
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={Package}
-                        title="暂无产品数据"
-                        description="该竞品还没有采集到产品，点击右上角「重新采集」试试。"
-                      />
-                    )}
-                  </td>
-                </tr>
-              )}
-
+            {/* 移动端卡片列表 */}
+            <div className="divide-y divide-slate-100 lg:hidden">
               {visibleProducts.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <ProductImage src={p.image_url} alt={p.title} className="h-10 w-10" />
-                  </td>
-                  <td className="max-w-[320px] px-4 py-3">
-                    {p.product_url ? (
-                      <a
-                        href={p.product_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block truncate font-medium text-ink hover:text-blue-600"
-                        title={p.title}
-                      >
-                        {p.title}
-                      </a>
-                    ) : (
-                      <span className="block truncate font-medium text-ink" title={p.title}>
-                        {p.title}
+                <div key={p.id} className="flex gap-3 p-4">
+                  <ProductImage src={p.image_url} alt={p.title} className="h-12 w-12 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink" title={p.title}>
+                      {p.product_url ? (
+                        <a href={p.product_url} target="_blank" rel="noreferrer" className="hover:text-blue-600">
+                          {p.title}
+                        </a>
+                      ) : (
+                        p.title
+                      )}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs tabular-nums text-ink-muted">
+                      <span className="text-sm font-medium text-ink">{formatPrice(p.price)}</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        {p.rating != null ? Number(p.rating).toFixed(1) : '—'}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-medium tabular-nums text-ink">
-                    {formatPrice(p.price)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.rating == null ? (
-                      <span className="text-slate-300">—</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 tabular-nums text-ink">
-                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                        {Number(p.rating).toFixed(1)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-ink-muted">
-                    {formatNumber(p.review_count)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-ink-muted">
-                    {formatDateTime(p.scraped_at)}
-                  </td>
-                </tr>
+                      <span>{formatNumber(p.review_count)} 评价</span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-400">{formatDateTime(p.scraped_at)}</p>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

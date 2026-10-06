@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { PlatformBadge, StatusBadge } from '../components/Badges.jsx'
 import { SortHeader } from '../components/SortHeader.jsx'
+import { SkeletonRows } from '../components/Skeleton.jsx'
 import {
   deleteCompetitor,
   listCompetitors,
@@ -139,139 +140,200 @@ export default function Competitors() {
           </p>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
-                {COLUMNS.map((col) => (
-                  <th key={col.key} className="px-4 py-3">
-                    {col.sortable ? (
-                      <SortHeader
-                        label={col.label}
-                        column={col.key}
-                        sort={sort}
-                        onToggle={toggleSort}
-                      />
-                    ) : (
-                      col.label
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading &&
-                Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={`skeleton-${i}`} className="border-b border-slate-100">
+        {/* 加载骨架 */}
+        {loading && <SkeletonRows rows={4} cols={7} />}
+
+        {/* 空状态 */}
+        {!loading && visible.length === 0 && (
+          query ? (
+            <EmptyState
+              illustration="search"
+              icon={Search}
+              title="没有匹配的竞品"
+              description="换个关键词试试，或清空搜索条件。"
+            />
+          ) : (
+            <EmptyState
+              illustration="radar"
+              icon={Store}
+              title="还没有竞品"
+              description="添加第一个竞品独立站，开始自动采集它的产品与价格数据。"
+            >
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setModalOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                添加竞品
+              </button>
+            </EmptyState>
+          )
+        )}
+
+        {/* 数据：桌面表格 */}
+        {!loading && visible.length > 0 && (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
                     {COLUMNS.map((col) => (
-                      <td key={col.key} className="px-4 py-3.5">
-                        <div className="h-4 animate-pulse rounded bg-slate-100" />
-                      </td>
+                      <th key={col.key} className="px-4 py-3">
+                        {col.sortable ? (
+                          <SortHeader
+                            label={col.label}
+                            column={col.key}
+                            sort={sort}
+                            onToggle={toggleSort}
+                          />
+                        ) : (
+                          col.label
+                        )}
+                      </th>
                     ))}
                   </tr>
-                ))}
-
-              {!loading && visible.length === 0 && (
-                <tr>
-                  <td colSpan={COLUMNS.length}>
-                    {query ? (
-                      <EmptyState
-                        icon={Search}
-                        title="没有匹配的竞品"
-                        description="换个关键词试试，或清空搜索条件。"
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={Store}
-                        title="还没有竞品"
-                        description="添加第一个竞品独立站，开始自动采集它的产品与价格数据。"
-                      >
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => setModalOpen(true)}
+                </thead>
+                <tbody>
+                  {visible.map((c) => (
+                    <tr
+                      key={c.id}
+                      onClick={() => navigate(`/competitors/${c.id}`)}
+                      className="cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50"
+                    >
+                      <td className="px-4 py-3.5 font-medium text-ink">{c.name}</td>
+                      <td className="max-w-[220px] px-4 py-3.5">
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex max-w-full items-center gap-1 text-blue-600 hover:underline"
                         >
-                          <Plus className="h-4 w-4" />
-                          添加竞品
-                        </button>
-                      </EmptyState>
-                    )}
-                  </td>
-                </tr>
-              )}
+                          <span className="truncate">{c.url}</span>
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                        </a>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <PlatformBadge platform={c.platform} />
+                      </td>
+                      <td className="px-4 py-3.5 tabular-nums text-ink">
+                        {c.status === 'scraping' ? (
+                          <span className="inline-flex items-center gap-1.5 text-slate-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            统计中
+                          </span>
+                        ) : (
+                          formatNumber(c.product_count)
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 tabular-nums text-ink-muted">
+                        {formatDateTime(c.last_scraped_at)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={c.status} />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <IconButton
+                            title="查看详情"
+                            onClick={() => navigate(`/competitors/${c.id}`)}
+                            className="hover:bg-blue-50 hover:text-blue-600"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
+                            title={c.status === 'scraping' ? '采集中…' : '重新采集'}
+                            disabled={c.status === 'scraping'}
+                            onClick={() => handleRescrape(c)}
+                            className="hover:bg-slate-100 hover:text-slate-700"
+                          >
+                            <RefreshCw
+                              className={cn('h-4 w-4', c.status === 'scraping' && 'animate-spin')}
+                            />
+                          </IconButton>
+                          <IconButton
+                            title="删除"
+                            onClick={() => setPendingDelete(c)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-              {!loading &&
-                visible.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => navigate(`/competitors/${c.id}`)}
-                    className="cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50"
+            {/* 数据：移动端卡片列表 */}
+            <div className="divide-y divide-slate-100 lg:hidden">
+              {visible.map((c) => (
+                <div
+                  key={c.id}
+                  className="cursor-pointer p-4 transition-colors hover:bg-slate-50"
+                  onClick={() => navigate(`/competitors/${c.id}`)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-medium text-ink">{c.name}</span>
+                    <StatusBadge status={c.status} />
+                  </div>
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1 inline-flex max-w-full items-center gap-1 text-sm text-blue-600 hover:underline"
                   >
-                    <td className="px-4 py-3.5 font-medium text-ink">{c.name}</td>
-                    <td className="max-w-[220px] px-4 py-3.5">
-                      <a
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex max-w-full items-center gap-1 text-blue-600 hover:underline"
-                      >
-                        <span className="truncate">{c.url}</span>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                      </a>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <PlatformBadge platform={c.platform} />
-                    </td>
-                    <td className="px-4 py-3.5 tabular-nums text-ink">
+                    <span className="truncate">{c.url}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-ink-muted">
+                    <PlatformBadge platform={c.platform} />
+                    <span>
                       {c.status === 'scraping' ? (
-                        <span className="inline-flex items-center gap-1.5 text-slate-400">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span className="inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
                           统计中
                         </span>
                       ) : (
-                        formatNumber(c.product_count)
+                        `${formatNumber(c.product_count)} 产品`
                       )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 tabular-nums text-ink-muted">
-                      {formatDateTime(c.last_scraped_at)}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <StatusBadge status={c.status} />
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <IconButton
-                          title="查看详情"
-                          onClick={() => navigate(`/competitors/${c.id}`)}
-                          className="hover:bg-blue-50 hover:text-blue-600"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </IconButton>
-                        <IconButton
-                          title={c.status === 'scraping' ? '采集中…' : '重新采集'}
-                          disabled={c.status === 'scraping'}
-                          onClick={() => handleRescrape(c)}
-                          className="hover:bg-slate-100 hover:text-slate-700"
-                        >
-                          <RefreshCw
-                            className={cn('h-4 w-4', c.status === 'scraping' && 'animate-spin')}
-                          />
-                        </IconButton>
-                        <IconButton
-                          title="删除"
-                          onClick={() => setPendingDelete(c)}
-                          className="hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                    <span>{formatDateTime(c.last_scraped_at)}</span>
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-1 border-t border-slate-100 pt-2.5">
+                    <IconButton
+                      title="查看详情"
+                      onClick={() => navigate(`/competitors/${c.id}`)}
+                      className="hover:bg-blue-50 hover:text-blue-600"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </IconButton>
+                    <IconButton
+                      title={c.status === 'scraping' ? '采集中…' : '重新采集'}
+                      disabled={c.status === 'scraping'}
+                      onClick={() => handleRescrape(c)}
+                      className="hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <RefreshCw
+                        className={cn('h-4 w-4', c.status === 'scraping' && 'animate-spin')}
+                      />
+                    </IconButton>
+                    <IconButton
+                      title="删除"
+                      onClick={() => setPendingDelete(c)}
+                      className="hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </IconButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <AddCompetitorModal
@@ -302,7 +364,7 @@ function IconButton({ title, onClick, className, disabled, children }) {
       }}
       disabled={disabled}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+        'flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
         className,
       )}
     >

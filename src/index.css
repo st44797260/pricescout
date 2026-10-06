@@ -50,14 +50,14 @@
     @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
 
-  /* 可交互卡片：悬停时阴影加深、边框加重、轻微上移 */
+  /* 可交互卡片：悬停时阴影加深、边框变蓝、轻微上移 */
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md;
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md;
   }
 
   /* 按钮 */
   .btn {
-    @apply inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex h-9 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl px-3.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 disabled:pointer-events-none disabled:opacity-50;
   }
 
   /* 主按钮：蓝色渐变 */
@@ -82,7 +82,7 @@
 
   /* 表单输入 */
   .input {
-    @apply h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-ink shadow-sm transition-colors placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100;
+    @apply h-9 w-full cursor-text rounded-xl border border-slate-200 bg-white px-3 text-sm text-ink shadow-sm transition-colors placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100;
   }
 
   /* 表单标签 */
@@ -153,6 +153,41 @@
     border: 2px solid #2563eb;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
     cursor: pointer;
+  }
+}
+
+/* ============================================================
+   动效：数字闪烁 + 折线绘制
+   ============================================================ */
+
+/* 数值变化时的颜色闪烁（FlashNumber / AnimatedNumber） */
+@keyframes score-flash {
+  0% {
+    color: #2563eb;
+    text-shadow: 0 0 14px rgb(37 99 235 / 0.45);
+    transform: scale(1.06);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+    transform: scale(1);
+  }
+}
+.flash-number {
+  display: inline-block;
+  animation: score-flash 0.9s ease-out;
+}
+
+/* 折线图路径绘制动画：Recharts 曲线加载时从左向右画出 */
+.recharts-line-curve,
+.recharts-area-curve {
+  stroke-dasharray: 2600;
+  stroke-dashoffset: 2600;
+  animation: chart-draw 1.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes chart-draw {
+  to {
+    stroke-dashoffset: 0;
   }
 }
 
